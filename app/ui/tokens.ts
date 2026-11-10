@@ -9,15 +9,20 @@ import { alpha, colors } from "./theme";
 /** A touch screen: 44-point targets. */
 export const touch = !(platform.idiom === "desktop" || platform.idiom === "mac");
 
-/** Sizes: the gallery's proportions, a step larger (the owner reads this all day). */
+/**
+ * Sizes: the gallery's proportions, a step larger (the owner reads this all day). A field and a `md` button share one
+ * height, so a field and its button line up in a row; `sm` is the compact tier of toolbars and cards.
+ */
 export const size = {
   text: 17,
   line: 26,
   small: 15,
   tiny: 13,
-  control: touch ? 44 : 38,
-  controlSm: touch ? 40 : 30,
+  field: touch ? 44 : 34,
+  control: touch ? 44 : 34,
+  controlSm: touch ? 44 : 28,
   icon: touch ? 44 : 32,
+  iconSm: touch ? 44 : 28,
   row: touch ? 44 : 34,
   bar: touch ? 56 : 52,
   sidebar: 288,
@@ -25,23 +30,32 @@ export const size = {
 };
 
 /**
- * The corner-radius ladder, largest first: the composer, then fields, then buttons and rows, then badges and keys.
- * Restrained on purpose: a small button never gets a pill.
+ * The corner-radius ladder, largest first: the composer, then fields, then buttons and rows, then icon buttons, then
+ * badges and keys. Restrained on purpose: a small button never gets a pill.
  */
 export const corner = {
   composer: 24,
-  field: 12,
-  control: 10,
+  field: 10,
+  control: 8,
   item: 8,
-  badge: 6,
-  key: 5,
+  icon: 6,
+  badge: 5,
+  key: 4,
 } as const;
 
 /** Spacing steps (points). */
 export const space = { xs: 4, sm: 6, md: 8, lg: 12, xl: 16, xxl: 24 } as const;
 
-/** Type steps (points). */
-export const font = { key: 12.5, badge: 12.5, sm: 13, md: 15, lg: 17 } as const;
+/** Type steps (points), each with its line height: a label never sets its own. */
+export const font = { key: 12, badge: 12, sm: 13, md: 15, lg: 17 } as const;
+export const leading = { key: 16, badge: 16, sm: 18, md: 20, lg: 24 } as const;
+
+/**
+ * The quiet fills of controls, as the text color's opacity over whatever surface they sit on: the same steps in light
+ * and dark. `rest` is a secondary control's own fill, `hover` and `press` its states; a ghost control starts clear and
+ * takes `hover` / `press`, and the selected or checked one keeps `selected`.
+ */
+export const fill = { rest: 0.07, hover: 0.1, press: 0.14, ghostHover: 0.06, ghostPress: 0.1, selected: 0.1 } as const;
 
 /** Durations shared by hover / state transitions (milliseconds). */
 export const duration = { quick: 120, enter: 420 } as const;

@@ -70,13 +70,17 @@ import {
   Badge,
   Button,
   composerGlass,
+  corner,
+  Count,
   glass,
   IconButton,
   Indicator,
   type IndicatorStatus,
+  Input as TextField,
   Kbd,
   Separator,
   size,
+  statusColor,
   Switch,
   touch,
 } from "./ui";
@@ -534,11 +538,11 @@ function hubMarkdown(text: string): string {
 const chipText = { cursor: "pointer", userSelect: "none" } as const;
 /** A message's first line, without markdown marks, for a one-line quote. */
 const firstLine = (t: string) => (t.split("\n").find((l) => l.trim()) ?? "").replace(/^\s*(#+|>)\s*/, "").replace(/[*_`]/g, "").trim().slice(0, 80);
-const chipFrame: ViewStyle = {
+const chipFrame = (): ViewStyle => ({
   cursor: "pointer", verticalAlign: "middle", flexDirection: "row", alignItems: "center", gap: 5, marginHorizontal: 2, height: 20,
-  borderWidth: 1, borderColor: colors.border, backgroundColor: alpha(colors.text, 0.05),
-};
-const chipHover: ViewStyle = { borderColor: colors.fieldBorder, backgroundColor: alpha(colors.text, 0.09) };
+  borderRadius: corner.badge, borderCurve: "continuous", backgroundColor: alpha(colors.text, 0.07),
+});
+const chipHover = (): ViewStyle => ({ backgroundColor: alpha(colors.text, 0.12) });
 
 function Custom(props: { node: TextViewCustomNode; small: boolean }) {
   const n = props.node;
@@ -547,7 +551,7 @@ function Custom(props: { node: TextViewCustomNode; small: boolean }) {
     const st = () => STATE_OF()[taskState(n.text!) ?? ""];
     return (
       <View role="link" testID={`task-chip-${n.text}`} accessibilityLabel={L(`Task ${n.text}`, `任务 ${n.text}`)} onPress={() => taskLink(n.text!)}
-        hoverStyle={chipHover} style={{ ...chipFrame, paddingHorizontal: 7, borderRadius: 999 }}>
+        hoverStyle={chipHover()} style={{ ...chipFrame(), paddingHorizontal: 6 }}>
         <If when={st()}>
           <View style={{ cursor: "pointer", width: 6, height: 6, borderRadius: 3, backgroundColor: st()?.[1] ?? colors.muted }} />
         </If>
@@ -556,7 +560,7 @@ function Custom(props: { node: TextViewCustomNode; small: boolean }) {
     );
   }
   return (
-    <View style={{ verticalAlign: "middle", height: 20, justifyContent: "center", marginHorizontal: 2, paddingHorizontal: 6, borderRadius: 5, backgroundColor: alpha(colors.text, 0.06) }}>
+    <View style={{ verticalAlign: "middle", height: 20, justifyContent: "center", marginHorizontal: 2, paddingHorizontal: 6, borderRadius: corner.badge, backgroundColor: alpha(colors.text, 0.07) }}>
       <Text style={{ fontFamily: MONO, fontSize: fs, lineHeight: 16, color: colors.muted }}>{n.text}</Text>
     </View>
   );
@@ -1002,21 +1006,21 @@ function MsgActions(props: { text: string; show: () => boolean; onReply?: () => 
       t = setTimeout(() => copied.set(false), 1500);
     }, () => {});
   };
-  const btn = () => ({ width: touch ? 44 : 32, height: touch ? 44 : 32, borderRadius: radius.control, borderCurve: "continuous" as const, alignItems: "center" as const, justifyContent: "center" as const, cursor: "pointer" as const });
   return (
-    <View style={{ flexDirection: "row", alignSelf: props.align ?? "flex-start", gap: 2, height: touch ? 44 : 32, marginLeft: props.align === "flex-end" ? 0 : -6, opacity: props.show() || copied() ? 1 : 0, transitionProperty: "opacity", transitionDuration: 120 }}>
-      <View role="button" testID={`copy-${props.id}`} accessibilityLabel={copied() ? L("Copied", "已复制") : L("Copy", "复制")} onPress={copy} hoverStyle={hovered()} style={btn()}>
-        <Icon name={copied() ? "check" : "copy"} size={18} tint={colors.muted} />
-      </View>
+    <View style={{ flexDirection: "row", alignItems: "center", alignSelf: props.align ?? "flex-start", gap: 2, height: touch ? 44 : 32, marginLeft: props.align === "flex-end" ? 0 : -6, opacity: props.show() || copied() ? 1 : 0, transitionProperty: "opacity", transitionDuration: 120 }}>
+      <IconButton testID={`copy-${props.id}`} icon={copied() ? "check" : "copy"} label={copied() ? L("Copied", "已复制") : L("Copy", "复制")} tooltip={false} onPress={copy} />
       <If when={props.onReply}>
-        <View role="button" testID={`reply-${props.id}`} accessibilityLabel={L("Reply", "回复")} onPress={() => props.onReply?.()} hoverStyle={hovered()} style={btn()}>
-          <Icon name="reply" size={18} tint={colors.muted} />
-        </View>
+        <IconButton testID={`reply-${props.id}`} icon="reply" label={L("Reply", "回复")} tooltip={false} onPress={() => props.onReply?.()} />
       </If>
       <If when={props.onToggleRead}>
-        <View role="button" testID={`toggle-read-${props.id}`} accessibilityLabel={props.unread?.() ? L("Mark as read", "标为已读") : L("Mark as unread", "标为未读")} onPress={() => props.onToggleRead?.()} hoverStyle={hovered()} style={{ ...btn(), width: undefined, paddingHorizontal: 8 }}>
-          <Text style={{ fontSize: size.tiny, fontWeight: "600", color: colors.muted }}>{props.unread?.() ? L("Mark read", "标为已读") : L("Mark unread", "标为未读")}</Text>
-        </View>
+        <Button
+          testID={`toggle-read-${props.id}`}
+          size="sm"
+          variant="ghost"
+          accessibilityLabel={props.unread?.() ? L("Mark as read", "标为已读") : L("Mark as unread", "标为未读")}
+          label={props.unread?.() ? L("Mark read", "标为已读") : L("Mark unread", "标为未读")}
+          onPress={() => props.onToggleRead?.()}
+        />
       </If>
     </View>
   );
@@ -1049,8 +1053,9 @@ function OwnerBubble(props: { hub: Hub; event: HubEvent; out?: Outgoing; onRetry
             testID={`reply-to-${ref}`}
             onPress={() => props.onRef?.(ref!)}
             hoverStyle={{ opacity: 1 }}
-            style={{ cursor: "pointer", opacity: 0.85, flexDirection: "row", alignItems: "center", gap: 6, maxWidth: "100%", paddingLeft: 8, paddingRight: 4, borderLeftWidth: 2, borderLeftColor: colors.fieldBorder }}
+            style={{ cursor: "pointer", opacity: 0.85, flexDirection: "row", alignItems: "center", gap: 6, maxWidth: "100%", paddingHorizontal: 4 }}
           >
+            <Icon name="reply" size={13} tint={colors.faint} />
             <Text style={{ ...chipText, fontFamily: MONO, fontSize: 12, color: colors.muted }}>{ref}</Text>
             <If when={asked()}>
               <Text style={{ ...chipText, flexShrink: 1, numberOfLines: 1, fontSize: 13, color: colors.faint }}>{asked()}</Text>
@@ -1243,13 +1248,13 @@ function Message(props: {
   );
 }
 
-/** A task's state as the sidebar's dot: only what needs attention gets a color. */
-const TONE: Record<string, IndicatorStatus> = { active: "running", blocked: "waiting", failed: "error", done: "idle", inbox: "queued", waiting: "waiting", nohost: "waiting", parked: "waiting" };
+/** A task's state as a status dot: running blue, waiting yellow, done green, failed red, the rest grey. */
+const TONE: Record<string, IndicatorStatus> = { active: "running", blocked: "waiting", failed: "error", done: "done", cancelled: "idle", inbox: "queued", waiting: "waiting", nohost: "waiting", parked: "waiting" };
 
-/** A task's state: its label, color and mark. */
+/** A task's state: its label, color (its dot's, `TONE`) and mark. */
 const STATE_OF = (): Record<string, [string, string, string]> => ({
-  active: [L("In progress", "进行中"), colors.up, "●"], inbox: [L("Queued", "排队中"), colors.info, "○"], waiting: [L("Waiting on subtasks", "等子任务"), colors.warn, "○"], nohost: [L("Waiting for a machine", "等机器"), colors.warn, "○"], parked: [L("Waiting on external result", "等外部结果"), colors.warn, "○"],
-  blocked: [L("Needs your decision", "等你决定"), colors.warn, "!"], failed: [L("Failed", "失败"), colors.danger, "✕"], done: [L("Done", "完成"), colors.faint, "✓"], cancelled: [L("Cancelled", "已取消"), colors.faint, "✕"],
+  active: [L("In progress", "进行中"), statusColor("running"), "●"], inbox: [L("Queued", "排队中"), statusColor("queued"), "○"], waiting: [L("Waiting on subtasks", "等子任务"), statusColor("waiting"), "○"], nohost: [L("Waiting for a machine", "等机器"), statusColor("waiting"), "○"], parked: [L("Waiting on external result", "等外部结果"), statusColor("waiting"), "○"],
+  blocked: [L("Needs your decision", "等你决定"), statusColor("waiting"), "!"], failed: [L("Failed", "失败"), statusColor("error"), "✕"], done: [L("Done", "完成"), statusColor("done"), "✓"], cancelled: [L("Cancelled", "已取消"), statusColor("idle"), "✕"],
 });
 
 /** A progress step's icon and color. */
@@ -1383,23 +1388,19 @@ function ChannelHeader(props: { channels: Channels; slug: string }) {
                 <Text testID="channel-goal" style={{ fontSize: 14.5, lineHeight: 21, color: ch()!.goal ? colors.muted : colors.faint, userSelect: "text" }}>{ch()!.goal || L("No goal yet", "还没有目标")}</Text>
               }>
                 <View style={{ gap: 8, paddingTop: 4 }}>
-                  <Input
+                  <TextField
                     testID="channel-name-input"
                     value={name()}
-                    onChange={({ value }) => name.set(value)}
+                    onChange={name.set}
                     onSubmit={() => void saveGoal()}
                     placeholder={L("Channel name", "Channel 名称")}
-                    class="placeholder:text-faint"
-                    style={{ height: 38, paddingHorizontal: 12, fontSize: 15, fontWeight: "600", color: colors.text, borderRadius: radius.control, borderWidth: 1, borderColor: colors.fieldBorder, backgroundColor: colors.surface }}
                   />
-                  <Input
+                  <TextField
                     testID="channel-goal-input"
                     value={goal()}
-                    onChange={({ value }) => goal.set(value)}
+                    onChange={goal.set}
                     onSubmit={() => void saveGoal()}
                     placeholder={L("What this channel is for: the team assigns work by it", "这个 channel 是做什么的，团队按它归类工作")}
-                    class="placeholder:text-faint"
-                    style={{ height: 38, paddingHorizontal: 12, fontSize: 15, color: colors.text, borderRadius: radius.control, borderWidth: 1, borderColor: colors.fieldBorder, backgroundColor: colors.surface }}
                   />
                   <View style={{ flexDirection: "row", gap: 8 }}>
                     <Button testID="channel-save-goal" variant="primary" label={L("Save", "保存")} disabled={busy()} onPress={() => void saveGoal()} />
@@ -1448,14 +1449,13 @@ function TaskHistory(props: { hub: Hub; wide: boolean; onTask: (id: string) => v
       <View style={{ width: "100%", maxWidth: size.column, alignSelf: "center", gap: 12, paddingHorizontal: props.wide ? 32 : 16, paddingVertical: 20 }}>
         {/* searched on the button or Enter, not on every keystroke: each search reads every task on the server */}
         <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
-          <Input
+          <TextField
             testID="task-search"
             value={query()}
-            onChange={({ value }) => query.set(value)}
+            onChange={query.set}
             onSubmit={() => void load(true)}
             placeholder={L("Search by ID, title or member", "搜索编号、标题或成员")}
-            class="placeholder:text-faint"
-            style={{ flex: 1, height: 38, paddingHorizontal: 12, fontSize: 15, color: colors.text, borderRadius: radius.control, borderWidth: 1, borderColor: colors.fieldBorder, backgroundColor: colors.surface }}
+            style={{ flex: 1 }}
           />
           <Button testID="task-search-button" label={L("Search", "搜索")} variant="secondary" disabled={loading()} onPress={() => void load(true)} />
         </View>
@@ -1792,9 +1792,7 @@ function SideHeading(props: { title: string; count?: number | string; accent?: b
       <View style={{ flex: 1 }} />
       <If when={props.count}>
         <If when={props.accent} else={<Text style={{ fontSize: 12.5, color: colors.faint, fontVariant: ["tabular-nums"] }}>{String(props.count)}</Text>}>
-          <View style={{ minWidth: 20, height: 20, paddingHorizontal: 6, borderRadius: 10, alignItems: "center", justifyContent: "center", backgroundColor: colors.accentFill }}>
-            <Text style={{ fontSize: 12, fontWeight: "600", color: colors.onAccent }}>{String(props.count)}</Text>
-          </View>
+          <Count value={props.count!} />
         </If>
       </If>
     </View>
@@ -1949,9 +1947,7 @@ function Sidebar(props: {
                 <Text style={{ fontSize: 12.5, color: colors.faint, fontVariant: ["tabular-nums"] }}>{L(`${waits().length} to decide`, `${waits().length} 待决定`)}</Text>
               </If>
               <If when={props.unread()}>
-                <View testID="channel-unread" accessibilityLabel={L(`${props.unread()} unread`, `${props.unread()} 条未读`)} style={{ minWidth: 20, height: 20, paddingHorizontal: 6, borderRadius: 10, alignItems: "center", justifyContent: "center", backgroundColor: colors.accentFill }}>
-                  <Text style={{ fontSize: 12, fontWeight: "600", color: colors.onAccent, fontVariant: ["tabular-nums"] }}>{props.unread() > 99 ? "99+" : String(props.unread())}</Text>
-                </View>
+                <Count testID="channel-unread" accessibilityLabel={L(`${props.unread()} unread`, `${props.unread()} 条未读`)} value={props.unread()} />
               </If>
             </SideRow>
             }>
@@ -2977,7 +2973,7 @@ function CommandRows(props: { settings: Settings }) {
         label={L("/Update all machines", "/更新所有机器")}
         detail={L("Make every machine pull the latest code and restart", "让所有机器拉取最新代码并重启")}
         testID="command-row-builtin"
-        trailing={<Text style={{ fontSize: 12, color: colors.faint, paddingHorizontal: 7, paddingVertical: 2, borderRadius: 6, backgroundColor: colors.raised }}>{L("Built-in", "内置")}</Text>}
+        trailing={<Badge label={L("Built-in", "内置")} />}
       />
       <Each of={saved()} key={(c) => c.name}>
         {(c) => (
@@ -3064,7 +3060,7 @@ function CommandEditor(props: { settings: Settings }) {
                 height: 140,
                 paddingHorizontal: 14,
                 paddingVertical: 10,
-                borderRadius: radius.control,
+                borderRadius: corner.field,
                 borderWidth: 1,
                 borderColor: focused() ? colors.accent : colors.fieldBorder,
                 backgroundColor: colors.field,
@@ -5141,7 +5137,7 @@ function Field(props: {
         style={{
           height: props.big ? 56 : 44,
           paddingHorizontal: 14,
-          borderRadius: radius.control,
+          borderRadius: corner.field,
           borderWidth: 1,
           borderColor: focused() ? colors.accent : colors.fieldBorder,
           backgroundColor: colors.field,

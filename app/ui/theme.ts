@@ -53,6 +53,9 @@ export interface Palette {
   onLight: string;
   /** The app's sidebar, beside the page. */
   sidebar: string;
+  /** A floating surface (a tooltip, a menu) and its text. */
+  popover: string;
+  popoverText: string;
   /** A switch's track when off. */
   track: string;
   /** A switch's knob when off. */
@@ -61,6 +64,8 @@ export interface Palette {
   code: string;
   info: string;
   warn: string;
+  /** Waiting on something (a status dot): yellow, where `warn` is the amber of text. */
+  pending: string;
   danger: string;
   up: string;
   switchOn: string;
@@ -102,11 +107,14 @@ export const colors: Palette = tokens<keyof Palette>({
   light: "primary",
   onLight: "primary-foreground",
   sidebar: "sidebar",
+  popover: "popover",
+  popoverText: "popover-foreground",
   track: "track",
   knob: "knob",
   code: "code",
   info: "info",
   warn: "warn",
+  pending: "pending",
   danger: "destructive",
   up: "up",
   switchOn: "switch-on",
