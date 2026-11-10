@@ -38,7 +38,7 @@ import {
   windowSize, token, openUrl, keyboardFrame, Picker, Speech, Clipboard, Notifications } from "nsh";
 import fs from "fs/promises";
 import type { InputRef, JSX, ScrollRef, SpeechSession, ViewStyle } from "nsh";
-import { AlertDialog, Toast, ToastStack, Button, ContextMenu, Dialog, Menu, MenuItem, MenuSeparator, Submenu, Input, NavPage, NavStack, NumberInput, Radio, RadioGroup, Scrollbar, TextView, createNavStack, type MarkdownExtension, type TextViewBlock, type TextViewCustomNode, type TextViewInline } from "nsh/base";
+import { AlertDialog, Toast, ToastStack, Button as BaseButton, ContextMenu, Dialog, Menu, MenuItem, MenuSeparator, Submenu, Input, NavPage, NavStack, NumberInput, Radio, RadioGroup, Scrollbar, TextView, createNavStack, type MarkdownExtension, type TextViewBlock, type TextViewCustomNode, type TextViewInline } from "nsh/base";
 import { isAvailable as hasWindow, titleBar, currentWindow } from "nsh/desktop";
 import { checkForPackage, checkForUpdate, downloadPackage, downloadUpdate, installAndRestart, restartToPackage, runningPackage } from "nsh/updater";
 // shellInfo through the namespace: runtimes older than it lack the export, and a missing named import would fail to link
@@ -57,7 +57,6 @@ import { CHECK_EVERY_MS, createUpdates, shellLine, type ShellInfo, type UpdateSt
 import {
   alpha,
   colors,
-  Toggle,
   focusRing,
   hovered,
   Icon,
@@ -67,7 +66,19 @@ import {
   scrollbarTheme,
   Spinner,
   tints,
-  Tip,
+  Tooltip,
+  Badge,
+  Button,
+  composerGlass,
+  glass,
+  IconButton,
+  Indicator,
+  type IndicatorStatus,
+  Kbd,
+  Separator,
+  size,
+  Switch,
+  touch,
 } from "./ui";
 import {
   answeredIds,
@@ -143,23 +154,10 @@ const CODE_LEN = 8;
 type Config = { url: string; token: string };
 /** `token` holds the login session (sent as `Bearer`, and `?token=` on the WebSocket and media URLs). */
 const KEYS = { url: "hub.url", token: "hub.token", email: "hub.email", theme: "hub.theme", seen: "hub.lastSeen", notifyOff: "hub.notifyOff", draft: "hub.draft" };
-const touch = !(platform.idiom === "desktop" || platform.idiom === "mac");
 /** iOS and Android draw the pages' headers (title, back, swipe back); the desktops and the web show the app's. */
 const systemHeader = platform.os === "ios" || platform.os === "android";
 const MONO = "monospace";
 
-/** Sizes: the gallery's proportions, a step larger (the owner reads this all day). */
-const size = {
-  text: 17,
-  line: 26,
-  small: 15,
-  tiny: 13,
-  control: touch ? 44 : 38,
-  row: touch ? 44 : 34,
-  bar: touch ? 56 : 52,
-  sidebar: 288,
-  column: 880,
-};
 
 // ---------------------------------------------------------------- settings & connection
 
@@ -380,203 +378,11 @@ function toggleTheme() {
 
 // ---------------------------------------------------------------- small pieces (the gallery's idioms)
 
-/** A key as a small badge: `1`, `Enter`, `⌘K`. */
-function Kbd(props: { k: string; on?: string }) {
-  return (
-    <View
-      style={{
-        minWidth: 22,
-        height: 22,
-        paddingHorizontal: 6,
-        alignItems: "center",
-        justifyContent: "center",
-        borderRadius: 5,
-        borderWidth: 1,
-        borderColor: props.on ? alpha(props.on, 0.35) : colors.border,
-        backgroundColor: props.on ? "transparent" : colors.raised,
-      }}
-    >
-      <Text style={{ fontSize: 12.5, fontWeight: "500", color: props.on ?? colors.muted, fontVariant: ["tabular-nums"] }}>{props.k}</Text>
-    </View>
-  );
-}
-
-/** A quiet icon button of the toolbars and the sidebar (the gallery's ToolButton, at 36 pt). */
-function ToolButton(props: { icon: IconName; label: string; shortcut?: string; on?: boolean; onPress: () => void; testID?: string; noTooltip?: boolean; compact?: boolean }) {
-  return (
-    <View
-      onPress={props.onPress}
-      role="button"
-      testID={props.testID}
-      accessibilityLabel={props.label}
-      accessibilityState={props.on === undefined ? undefined : { selected: props.on }}
-      tooltip={props.noTooltip ? undefined : <Tip label={props.label} shortcut={props.shortcut} />}
-      hoverStyle={hovered()}
-      activeStyle={{ backgroundColor: alpha(colors.text, 0.09) }}
-      focusStyle={focusRing()}
-      style={{ width: touch ? 44 : 32, height: touch ? 44 : 32, alignItems: "center", justifyContent: "center", borderRadius: radius.control, borderCurve: "continuous", borderWidth: 1, borderColor: "transparent" }}
-    >
-      <Icon name={props.icon} size={18} tint={props.on ? colors.accent : colors.muted} />
-    </View>
-  );
-}
-
-type BtnKind = "primary" | "secondary" | "ghost" | "dashed" | "danger";
-
 /** Shared edge for controls and grouped settings surfaces. */
 const surfaceEdge = () => colors.line;
 
-/** A labelled button: the gallery's raised / accent-filled look, 38 pt (44 on touch). */
-function Btn(props: {
-  label: string;
-  kind?: BtnKind;
-  icon?: IconName;
-  kbd?: string;
-  note?: string;
-  busy?: boolean;
-  disabled?: boolean;
-  /** the option the owner picked: a check and an accent edge, not dimmed */
-  checked?: boolean;
-  onPress: () => void;
-  testID?: string;
-  accessibilityLabel?: string;
-  grow?: boolean;
-}) {
-  const kind = () => props.kind ?? "secondary";
-  const fg = () => (kind() === "primary" ? colors.onAccent : kind() === "danger" ? colors.danger : kind() === "dashed" || kind() === "ghost" ? colors.muted : colors.text);
-  const look = (): ViewStyle =>
-    kind() === "primary"
-      ? { backgroundColor: colors.accentFill, borderColor: "transparent" }
-      : kind() === "danger"
-        ? { backgroundColor: tints.danger, borderColor: alpha(colors.danger, 0.3) }
-        : kind() === "ghost"
-          ? { backgroundColor: "transparent", borderColor: "transparent" }
-          : kind() === "dashed"
-            ? { backgroundColor: "transparent", borderColor: colors.fieldBorder, borderStyle: "dashed" }
-            : { backgroundColor: colors.surface, borderColor: surfaceEdge() };
-  return (
-    <View
-      role="button"
-      testID={props.testID}
-      accessibilityLabel={props.accessibilityLabel}
-      accessibilityState={{ disabled: !!props.disabled, ...(props.checked ? { checked: true } : {}) }}
-      onPress={() => !props.disabled && !props.busy && props.onPress()}
-      hoverStyle={props.disabled ? undefined : kind() === "primary" ? { opacity: 0.92 } : hovered()}
-      activeStyle={props.disabled ? undefined : kind() === "primary" ? { opacity: 0.85 } : { backgroundColor: alpha(colors.text, 0.09) }}
-      focusStyle={focusRing()}
-      style={{
-        minHeight: size.control,
-        maxWidth: "100%",
-        flexShrink: 1,
-        flexGrow: props.grow ? 1 : 0,
-        flexDirection: "row",
-        alignItems: "center",
-        justifyContent: "center",
-        gap: 8,
-        paddingHorizontal: 14,
-        paddingVertical: 6,
-        borderRadius: radius.control,
-        borderCurve: "continuous",
-        borderWidth: props.checked ? 1.5 : 0.5,
-        opacity: props.disabled && !props.checked ? 0.45 : 1,
-        transitionProperty: "background-color, border-color, opacity",
-        transitionDuration: 120,
-        ...look(),
-        ...(props.checked ? { backgroundColor: tints.accent, borderColor: colors.accentFill, cursor: "default" } : props.disabled ? { cursor: "default" } : {}),
-      }}
-    >
-      <If when={props.checked}>
-        <Icon name="check" size={16} tint={colors.accentFill} />
-      </If>
-      <If when={props.kbd}>
-        <Kbd k={props.kbd!} on={kind() === "primary" ? colors.onAccent : undefined} />
-      </If>
-      <If when={props.busy}>
-        <Spinner size={14} tint={fg()} />
-      </If>
-      <If when={!props.busy && props.icon}>
-        <Icon name={props.icon!} size={16} tint={fg()} />
-      </If>
-      <Text style={{ flexShrink: 1, textAlign: "center", fontSize: 15, lineHeight: 21, fontWeight: kind() === "primary" ? "600" : "500", color: fg() }}>{props.label}</Text>
-      <If when={props.note}>
-        <Text style={{ fontSize: size.tiny, color: kind() === "primary" ? alpha(colors.onAccent, 0.7) : colors.faint }}>{props.note}</Text>
-      </If>
-    </View>
-  );
-}
-
-/**
- * A floating surface, for the composer and the sidebar: Apple's Liquid Glass where it is drawn (iOS 26, macOS 26), a
- * blur elsewhere. Linux and Android before 12 draw no backdrop, so they stay opaque there, or what is behind would show
- * through the text on it.
- */
-const glass = (tint: string, cornerRadius: number): ViewStyle => ({
-  borderRadius: cornerRadius,
-  borderCurve: "continuous",
-  borderWidth: 1,
-  borderColor: alpha(colors.text, 0.1),
-  boxShadow: "0 8px 28px rgba(0,0,0,0.1)",
-  ...(platform.os === "linux" || (platform.os === "android" && Number(platform.version) < 31)
-    ? { backgroundColor: tint }
-    : { backgroundColor: alpha(tint, 0.55), glassEffect: "regular" as const, backdropFilter: "blur(20px)" }),
-});
-
-/** The floating surface of a message composer, which the conversation scrolls under. */
-const composerGlass = (active = false): ViewStyle => ({
-  ...glass(colors.field, 24),
-  ...(platform.os === "ios" ? { backgroundColor: alpha(colors.field, 0.25) } : {}),
-  boxShadow: "0 4px 16px rgba(0,0,0,0.06)",
-  borderWidth: platform.os === "ios" || platform.os === "macos" ? 0 : 1,
-  borderColor: alpha(colors.text, active ? 0.22 : 0.1),
-  transitionProperty: "border-color",
-  transitionDuration: 120,
-});
-
 /** Links use a quiet, underlined accent shared by the app's themes. */
 const linkColor = () => token("link");
-
-/** The icon-only send button of a message composer: a circle, the same size and icon scale as the voice button beside it. */
-function SendButton(props: { disabled: boolean; onPress: () => void; testID: string }) {
-  return (
-    <View
-      testID={props.testID}
-      role="button"
-      accessibilityLabel={L("Send", "发送")}
-      accessibilityState={{ disabled: props.disabled }}
-      onPress={() => !props.disabled && props.onPress()}
-      tooltip={touch ? undefined : <Tip label={L("Send", "发送")} shortcut="Enter" />}
-      hoverStyle={props.disabled ? undefined : { opacity: 0.9 }}
-      style={{
-        width: touch ? 44 : 36,
-        height: touch ? 44 : 36,
-        alignItems: "center",
-        justifyContent: "center",
-        borderRadius: touch ? 22 : 18,
-      }}
-    >
-      <View style={{ width: touch ? 32 : 28, height: touch ? 32 : 28, borderRadius: touch ? 16 : 14, alignItems: "center", justifyContent: "center", backgroundColor: colors.accentFill }}>
-        <Icon name="arrow-up" size={touch ? 18 : 16} tint={colors.onAccent} />
-      </View>
-    </View>
-  );
-}
-
-function Dot(props: { tone: "on" | "run" | "queue" | "wait" | "off" | "bad" }) {
-  const color = () => ({ on: colors.up, run: colors.up, queue: colors.info, wait: colors.warn, off: colors.faint, bad: colors.danger })[props.tone];
-  return <View style={{ width: 8, height: 8, borderRadius: 4, flexShrink: 0, backgroundColor: color() }} />;
-}
-
-/** A tag in the gallery's Badge style: a tone's tint behind its color. */
-function Badge(props: { label: string; tone?: "accent" | "warn" | "info" | "neutral" | "danger" }) {
-  const tone = props.tone ?? "neutral";
-  const fg = () => (tone === "neutral" ? colors.muted : tone === "accent" ? colors.accent : colors[tone]);
-  const bg = () => (tone === "neutral" ? colors.raised : tints[tone]);
-  return (
-    <View style={{ height: 22, paddingHorizontal: 8, justifyContent: "center", borderRadius: 6, backgroundColor: bg() }}>
-      <Text style={{ fontSize: 12.5, fontWeight: "600", color: fg() }}>{props.label}</Text>
-    </View>
-  );
-}
 
 /** The app's mark: a dark square with a live dot (the hub). */
 function Mark(props: { size?: number }) {
@@ -971,7 +777,7 @@ function DocPane(props: { doc: DocRef; wide: boolean; expanded: boolean; onExpan
             <View style={{ gap: 10, alignItems: "flex-start" }}>
               <Text testID="doc-status" style={{ fontSize: 14, color: body().error ? colors.danger : colors.faint }}>{body().error || L("Loading…", "读取中…")}</Text>
               <If when={body().error}>
-                <Btn label={L("Retry", "重试")} onPress={() => retryDoc(props.doc.src, cell())} testID="doc-retry" />
+                <Button label={L("Retry", "重试")} onPress={() => retryDoc(props.doc.src, cell())} testID="doc-retry" />
               </If>
             </View>
           }>
@@ -1151,12 +957,12 @@ function ProposalList(props: { event: HubEvent; selection: Map<string, Signal<Se
       </View>
       <If when={!props.done}>
         <View style={{ flexDirection: "row", flexWrap: "wrap", alignItems: "center", gap: 8, paddingHorizontal: 16, paddingTop: 2, paddingBottom: 16 }}>
-          <Btn testID={`approve-${e.ref}`} label={selection().size ? L(`Approve selected (${selection().size})`, `批准所选（${selection().size}）`) : L("Approve selected", "批准所选")} kind="primary" disabled={!selection().size}
+          <Button testID={`approve-${e.ref}`} label={selection().size ? L(`Approve selected (${selection().size})`, `批准所选（${selection().size}）`) : L("Approve selected", "批准所选")} variant="primary" disabled={!selection().size}
             onPress={() => answer([...selection()].sort((a, b) => +a - +b).join(","))} />
-          <Btn testID={`opt-${e.ref}-all`} label={L("Approve all", "全部批准")} kind="secondary" onPress={() => answer(menu ? "全部" : "all")} />
-          <Btn testID={`opt-${e.ref}-none`} label={L("None", "都不要")} kind="ghost" onPress={() => answer(menu ? "都不要" : "none")} />
+          <Button testID={`opt-${e.ref}-all`} label={L("Approve all", "全部批准")} variant="secondary" onPress={() => answer(menu ? "全部" : "all")} />
+          <Button testID={`opt-${e.ref}-none`} label={L("None", "都不要")} variant="ghost" onPress={() => answer(menu ? "都不要" : "none")} />
           <View style={{ flex: 1 }} />
-          <Btn testID={`other-${e.ref}`} label={L("Other instructions…", "其他指示…")} kind="dashed" onPress={() => props.onReply(e.ref!)} />
+          <Button testID={`other-${e.ref}`} label={L("Other instructions…", "其他指示…")} variant="outline" onPress={() => props.onReply(e.ref!)} />
         </View>
       </If>
     </>
@@ -1382,7 +1188,7 @@ function Message(props: {
             }}
           >
             <View style={{ flexDirection: "row", alignItems: "center", gap: 8, paddingHorizontal: 16, paddingTop: 12 }}>
-              <Badge label={tag ?? L("Needs you", "需要你")} tone={done() ? "neutral" : "warn"} />
+              <Badge label={tag ?? L("Needs you", "需要你")} variant={done() ? "neutral" : "warn"} />
               <Text style={{ fontFamily: MONO, fontSize: 13, color: colors.muted }}>{e.ref}</Text>
               <View style={{ flex: 1 }} />
               <If when={done()}>
@@ -1401,10 +1207,10 @@ function Message(props: {
             <View style={{ alignItems: "flex-start", gap: 8, paddingHorizontal: 16, paddingTop: 2, paddingBottom: 16 }}>
               <Each of={choicesOf(e).slice(0, 12)}>
                 {(c, i) => (
-                  <Btn
+                  <Button
                     testID={`opt-${e.ref}-${c()}`}
                     label={optionText(e, c())}
-                    kind="secondary"
+                    variant="secondary"
                     note={rec === c() ? L("Recommended", "推荐") : undefined}
                     disabled={done()}
                     checked={done() && picked()?.toUpperCase() === c().toUpperCase()}
@@ -1417,10 +1223,10 @@ function Message(props: {
                 <Text testID={`answer-${e.ref}`} style={{ fontSize: size.small, color: colors.muted }}>{L(`Your reply: ${answerText(`${e.ref} ${picked()}`)}`, `你的回复：${answerText(`${e.ref} ${picked()}`)}`)}</Text>
               </If>
               <If when={!done()}>
-                <Btn testID={`other-${e.ref}`} label={L("Other instructions…", "其他指示…")} kind="dashed" onPress={() => props.onReply(e.ref!)} />
+                <Button testID={`other-${e.ref}`} label={L("Other instructions…", "其他指示…")} variant="outline" onPress={() => props.onReply(e.ref!)} />
               </If>
               <If when={e.ref!.startsWith("D-") && !done()}>
-                <Btn testID={`ignore-${e.ref}`} label={L("Ignore", "忽略")} kind="dashed" onPress={() => props.onAnswer(e.ref!, IGNORE)} />
+                <Button testID={`ignore-${e.ref}`} label={L("Ignore", "忽略")} variant="outline" onPress={() => props.onAnswer(e.ref!, IGNORE)} />
               </If>
             </View>
             </>
@@ -1438,7 +1244,7 @@ function Message(props: {
 }
 
 /** A task's state as the sidebar's dot: only what needs attention gets a color. */
-const TONE: Record<string, "on" | "run" | "queue" | "wait" | "off" | "bad"> = { active: "run", blocked: "wait", failed: "bad", done: "off", inbox: "queue", waiting: "wait", nohost: "wait", parked: "wait" };
+const TONE: Record<string, IndicatorStatus> = { active: "running", blocked: "waiting", failed: "error", done: "idle", inbox: "queued", waiting: "waiting", nohost: "waiting", parked: "waiting" };
 
 /** A task's state: its label, color and mark. */
 const STATE_OF = (): Record<string, [string, string, string]> => ({
@@ -1570,7 +1376,7 @@ function ChannelHeader(props: { channels: Channels; slug: string }) {
             <View style={{ flex: 1, minWidth: 0, gap: 4 }}>
               <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
                 <Text style={{ flexShrink: 1, fontSize: 20, fontWeight: "700", color: colors.text, numberOfLines: 1 }}>{ch()!.name}</Text>
-                <If when={ch()!.status === "archived"}><View testID="channel-archived"><Badge label={L("Archived", "已归档")} tone="warn" /></View></If>
+                <If when={ch()!.status === "archived"}><View testID="channel-archived"><Badge label={L("Archived", "已归档")} variant="warn" /></View></If>
                 <If when={ch()!.status === "active" && ch()!.stale}><View testID="channel-stale"><Badge label={L("Quiet 7 days", "7 天无动静")} /></View></If>
               </View>
               <If when={editing()} else={
@@ -1596,17 +1402,17 @@ function ChannelHeader(props: { channels: Channels; slug: string }) {
                     style={{ height: 38, paddingHorizontal: 12, fontSize: 15, color: colors.text, borderRadius: radius.control, borderWidth: 1, borderColor: colors.fieldBorder, backgroundColor: colors.surface }}
                   />
                   <View style={{ flexDirection: "row", gap: 8 }}>
-                    <Btn testID="channel-save-goal" kind="primary" label={L("Save", "保存")} disabled={busy()} onPress={() => void saveGoal()} />
-                    <Btn testID="channel-cancel-goal" kind="ghost" label={L("Cancel", "取消")} onPress={() => editing.set(false)} />
+                    <Button testID="channel-save-goal" variant="primary" label={L("Save", "保存")} disabled={busy()} onPress={() => void saveGoal()} />
+                    <Button testID="channel-cancel-goal" variant="ghost" label={L("Cancel", "取消")} onPress={() => editing.set(false)} />
                   </View>
                 </View>
               </If>
             </View>
             <View style={{ flexDirection: "row", gap: 4 }}>
               <If when={!editing()}>
-                <Btn testID="channel-edit-goal" kind="ghost" label={L("Edit", "编辑")} onPress={() => { name.set(ch()!.name); goal.set(ch()!.goal); editing.set(true); }} />
+                <Button testID="channel-edit-goal" variant="ghost" label={L("Edit", "编辑")} onPress={() => { name.set(ch()!.name); goal.set(ch()!.goal); editing.set(true); }} />
               </If>
-              <Btn testID="channel-archive" kind="ghost" label={ch()!.status === "archived" ? L("Unarchive", "取消归档") : L("Archive", "归档")}
+              <Button testID="channel-archive" variant="ghost" label={ch()!.status === "archived" ? L("Unarchive", "取消归档") : L("Archive", "归档")}
                 onPress={() => void props.channels.save(props.slug, { archived: ch()!.status !== "archived" })} />
             </View>
           </View>
@@ -1651,7 +1457,7 @@ function TaskHistory(props: { hub: Hub; wide: boolean; onTask: (id: string) => v
             class="placeholder:text-faint"
             style={{ flex: 1, height: 38, paddingHorizontal: 12, fontSize: 15, color: colors.text, borderRadius: radius.control, borderWidth: 1, borderColor: colors.fieldBorder, backgroundColor: colors.surface }}
           />
-          <Btn testID="task-search-button" label={L("Search", "搜索")} kind="secondary" disabled={loading()} onPress={() => void load(true)} />
+          <Button testID="task-search-button" label={L("Search", "搜索")} variant="secondary" disabled={loading()} onPress={() => void load(true)} />
         </View>
         <If when={error()}><Text style={{ fontSize: 14, color: colors.danger }}>{error()}</Text></If>
         <If when={total() === 0 && !loading()}><Text style={{ fontSize: 14, color: colors.faint }}>{L("No matching tasks", "没有符合的任务")}</Text></If>
@@ -1665,7 +1471,7 @@ function TaskHistory(props: { hub: Hub; wide: boolean; onTask: (id: string) => v
                 hoverStyle={hovered()}
                 style={{ minHeight: size.row, flexDirection: "row", alignItems: "center", gap: 10, paddingHorizontal: 10, marginHorizontal: -10, borderRadius: 7 }}
               >
-                <Dot tone={TONE[t().state ?? ""] ?? "off"} />
+                <Indicator status={TONE[t().state ?? ""] ?? "idle"} />
                 <Text style={{ fontFamily: MONO, fontSize: 12.5, color: colors.faint }}>{t().id}</Text>
                 <Text style={{ flex: 1, fontSize: 14.5, color: colors.text, numberOfLines: 1 }}>{t().title}</Text>
                 <Text style={{ fontSize: 12.5, color: colors.faint, fontVariant: ["tabular-nums"] }}>{`${STATE_OF()[t().state ?? ""]?.[0] ?? ""} · ${clock(t().updated ?? "")}`}</Text>
@@ -1675,7 +1481,7 @@ function TaskHistory(props: { hub: Hub; wide: boolean; onTask: (id: string) => v
         </View>
         <If when={total() !== null && tasks().length < total()!}>
           <View style={{ alignSelf: "flex-start" }}>
-            <Btn testID="task-more" label={loading() ? L("Loading…", "读取中…") : L(`Load more (${total()! - tasks().length} left)`, `加载更多（还有 ${total()! - tasks().length} 个）`)} kind="secondary" disabled={loading()} onPress={() => void load(false)} />
+            <Button testID="task-more" label={loading() ? L("Loading…", "读取中…") : L(`Load more (${total()! - tasks().length} left)`, `加载更多（还有 ${total()! - tasks().length} 个）`)} variant="secondary" disabled={loading()} onPress={() => void load(false)} />
           </View>
         </If>
       </View>
@@ -1767,12 +1573,12 @@ function TaskDetail(props: { hub: Hub; id: string; wide: boolean; onFold?: (fold
         <If when={t()} else={<Text style={{ fontSize: 15, color: colors.muted }}>{missing() ? L(`Can’t find ${props.id}.`, `找不到 ${props.id}。`) : L("Loading…", "读取中…")}</Text>}>
           <View testID="task-head" style={{ gap: 8 }}>
             <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
-              <Badge label={stateLabel()} tone={t()!.state === "failed" ? "danger" : t()!.state === "blocked" ? "warn" : "neutral"} />
+              <Badge label={stateLabel()} variant={t()!.state === "failed" ? "danger" : t()!.state === "blocked" ? "warn" : "neutral"} />
               <Text style={{ fontFamily: MONO, fontSize: 13, color: colors.muted }}>{t()!.id}</Text>
               <View style={{ flex: 1 }} />
               <If when={cancellable() && !cancelling()}>
-                <Btn testID="finish-task" label={L("Done", "完成")} kind="ghost" icon="check" onPress={() => void finish()} />
-                <Btn testID="cancel-task" label={L("Cancel task", "取消任务")} kind="ghost" icon="close" onPress={() => void cancel()} />
+                <Button testID="finish-task" label={L("Done", "完成")} variant="ghost" icon="check" onPress={() => void finish()} />
+                <Button testID="cancel-task" label={L("Cancel task", "取消任务")} variant="ghost" icon="close" onPress={() => void cancel()} />
               </If>
               <If when={cancelling()}>
                 <Text style={{ fontSize: 13, color: colors.muted }}>{L("Working…", "处理中…")}</Text>
@@ -1813,7 +1619,7 @@ function TaskDetail(props: { hub: Hub; id: string; wide: boolean; onFold?: (fold
           </View>
           <If when={t()!.steps?.length}>
             <View style={{ marginTop: 24, gap: 6 }}>
-              <Btn label={L("Activity", "运行记录")} kind="ghost" onPress={() => showActivity.set(!showActivity())} />
+              <Button label={L("Activity", "运行记录")} variant="ghost" onPress={() => showActivity.set(!showActivity())} />
               <If when={showActivity()}><Each of={t()!.steps ?? []}>{(st) => <Text style={{ fontSize: 13, lineHeight: 20, color: colors.muted }}>{`${st().day ?? ""} ${st().time ?? ""}  ${st().text}`}</Text>}</Each></If>
             </View>
           </If>
@@ -1859,7 +1665,7 @@ function TaskDetail(props: { hub: Hub; id: string; wide: boolean; onFold?: (fold
               if (taskCaret) taskComposer?.setSelection(taskCaret.start, taskCaret.end);
             }}
           />
-          <SendButton testID="task-send" disabled={!text().trim()} onPress={() => void say()} />
+          <IconButton variant="primary" icon="arrow-up" label={L("Send", "发送")} shortcut="Enter" testID="task-send" disabled={!text().trim()} onPress={() => void say()} />
         </View>
       </View>
     </If>
@@ -1917,7 +1723,7 @@ function MachineDetail(props: { hub: Hub; host: string; wide: boolean; onTask: (
         <If when={h()} else={<Text style={{ fontSize: 15, color: colors.muted }}>{L(`${props.host} is offline.`, `${props.host} 现在不在线。`)}</Text>}>
           <View style={{ gap: 8 }}>
             <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
-              <Dot tone="on" />
+              <Indicator status="online" />
               <Text style={{ userSelect: "text", fontSize: 20, fontWeight: "600", color: colors.text }}>{h()!.host}</Text>
             </View>
             <Text style={{ fontSize: 14, color: colors.muted }}>
@@ -1945,7 +1751,7 @@ function MachineDetail(props: { hub: Hub; host: string; wide: boolean; onTask: (
                 {(a) => (
                   <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
                     <Text style={{ flex: 1, fontSize: 14.5, color: colors.text }}>{[a().cli, a().name, a().model].filter(Boolean).join(" · ")}</Text>
-                    <Badge label={`${ACCOUNT_STATE()[a().state]?.[0] ?? a().state}${a().until ? L(` until ${a().until!.slice(11, 16)}`, ` 至 ${a().until!.slice(11, 16)}`) : ""}`} tone={ACCOUNT_STATE()[a().state]?.[1] ?? "neutral"} />
+                    <Badge label={`${ACCOUNT_STATE()[a().state]?.[0] ?? a().state}${a().until ? L(` until ${a().until!.slice(11, 16)}`, ` 至 ${a().until!.slice(11, 16)}`) : ""}`} variant={ACCOUNT_STATE()[a().state]?.[1] ?? "neutral"} />
                   </View>
                 )}
               </Each>
@@ -1955,7 +1761,7 @@ function MachineDetail(props: { hub: Hub; host: string; wide: boolean; onTask: (
           <If when={h()!.running?.length} else={<Text style={{ fontSize: 14, color: colors.faint }}>{L("Idle", "空闲")}</Text>}>
             <View>
               <Each of={h()!.running ?? []} key={(t) => t.id}>
-                {(t) => row(t().id, t().title, [displayName(t().agent), t().activity?.model, since(t().started), activityLine(t().activity)?.text].filter(Boolean).join(" · "), <Dot tone="run" />)}
+                {(t) => row(t().id, t().title, [displayName(t().agent), t().activity?.model, since(t().started), activityLine(t().activity)?.text].filter(Boolean).join(" · "), <Indicator status="running" />)}
               </Each>
             </View>
           </If>
@@ -2006,7 +1812,7 @@ function SideRow(props: { onPress?: () => void; selected?: boolean; title?: stri
       onPress={props.onPress}
       role={props.onPress ? "button" : undefined}
       accessibilityLabel={props.title}
-      tooltip={props.title && !props.onPress ? <Tip label={props.title} placement="right" /> : undefined}
+      tooltip={props.title && !props.onPress ? <Tooltip label={props.title} placement="right" /> : undefined}
       hoverStyle={props.onPress && !props.selected ? hovered() : undefined}
       style={{
         minHeight: size.row,
@@ -2125,10 +1931,10 @@ function Sidebar(props: {
       >
         <Text style={{ flex: 1, fontSize: 16, fontWeight: "600", color: colors.text }}>Noop</Text>
         <If when={props.onClose}>
-          <ToolButton icon="close" label={L("Close menu", "收起菜单")} onPress={() => props.onClose?.()} />
+          <IconButton icon="close" label={L("Close menu", "收起菜单")} onPress={() => props.onClose?.()} />
         </If>
         <If when={props.onCollapse}>
-          <ToolButton icon="sidebar" label={L("Hide sidebar", "隐藏侧栏")} noTooltip compact onPress={() => props.onCollapse?.()} />
+          <IconButton icon="sidebar" label={L("Hide sidebar", "隐藏侧栏")} tooltip={false} onPress={() => props.onCollapse?.()} />
         </If>
       </View>
       <Scroll testID="sidebar-scroll" style={{ flex: 1, minWidth: 0 }}>
@@ -2166,7 +1972,7 @@ function Sidebar(props: {
                 popupStyle={{ minWidth: 160, padding: 4, borderRadius: radius.control, borderWidth: 1, borderColor: colors.line, backgroundColor: colors.surface }}
                 trigger={
                   <SideRow onPress={() => props.onPick(d().id)} title={d().id}>
-                    <Dot tone="wait" />
+                    <Indicator status="waiting" />
                     <Text style={rowText()}>{d().question || d().id}</Text>
                     <Text style={{ fontFamily: MONO, fontSize: 12, color: colors.faint }}>{d().id}</Text>
                   </SideRow>
@@ -2193,7 +1999,7 @@ function Sidebar(props: {
             {(a) => (
               <ContextMenu margin={8} popupStyle={menuStyle()} trigger={
                 <SideRow onPress={() => props.onTask(a().id)} selected={props.task() === a().id} title={`${a().id} · ${a().agent}${a().host ? ` @ ${a().host}` : ""}`}>
-                  <Dot tone="run" />
+                  <Indicator status="running" />
                   <Text style={rowText()}>{a().title}</Text>
                   <Text style={{ fontSize: 12.5, color: colors.faint, fontVariant: ["tabular-nums"] }}>{since(a().started)}</Text>
                 </SideRow>
@@ -2212,7 +2018,7 @@ function Sidebar(props: {
               {(a) => (
                 <ContextMenu margin={8} popupStyle={menuStyle()} trigger={
                 <SideRow onPress={() => props.onTask(a().id)} selected={props.task() === a().id} title={`${a().id} · ${STATE_OF()[a().state ?? ""]?.[0] ?? ""}`}>
-                  <Dot tone={TONE[a().state ?? ""] ?? "off"} />
+                  <Indicator status={TONE[a().state ?? ""] ?? "idle"} />
                   <Text style={{ ...rowText(), color: colors.muted }}>{a().title}</Text>
                   <Text style={{ maxWidth: "50%", minWidth: 0, flexShrink: 1, numberOfLines: 1, fontSize: 12.5, color: colors.faint, fontVariant: ["tabular-nums"] }}>{a().state === "waiting" ? L("Waiting on subtasks", "等子任务") : a().state === "parked" ? L("Waiting", "等待") : a().state === "nohost" ? L(`Waiting for ${needsLabel((a() as { needs?: string }).needs)}`, `等 ${needsLabel((a() as { needs?: string }).needs)}`) : L("Queued", "排队中")}</Text>
                 </SideRow>
@@ -2227,7 +2033,7 @@ function Sidebar(props: {
             <Each of={!recentOpen() ? [] : (s()?.recent ?? []).filter((t) => !(s()?.active ?? []).some((a) => a.id === t.id) && !isQueued(t.state)).slice(0, 6)} key={(a) => a.id}>
               {(a) => (
                 <SideRow onPress={() => props.onTask(a().id)} selected={props.task() === a().id} title={`${a().id} · ${STATE_OF()[a().state ?? ""]?.[0] ?? ""}`}>
-                  <Dot tone={TONE[a().state ?? ""] ?? "off"} />
+                  <Indicator status={TONE[a().state ?? ""] ?? "idle"} />
                   <Text style={{ ...rowText(), color: colors.muted }}>{a().title}</Text>
                   <Text style={{ fontSize: 12.5, color: colors.faint, fontVariant: ["tabular-nums"] }}>{since(a().updated)}</Text>
                 </SideRow>
@@ -2287,7 +2093,7 @@ function Sidebar(props: {
           <Each of={s()?.hosts ?? []} key={(h) => h.host}>
             {(h) => (
               <SideRow onPress={() => props.onMachine(h().host)} selected={props.machine() === h().host} title={L(`Load ${loadOf(h())}% · Disk ${h().stats?.diskFreeGB ?? "?"} GB free · ${h().busy ?? 0} running`, `负载 ${loadOf(h())}% · 磁盘 ${h().stats?.diskFreeGB ?? "?"}GB · ${h().busy ?? 0} 个运行中`)}>
-                <Dot tone="on" />
+                <Indicator status="online" />
                 <Text style={rowText()}>{h().host}</Text>
                 <If when={(h().busy ?? 0) > 0}>
                   <Text style={{ fontSize: 13, color: colors.muted, fontVariant: ["tabular-nums"] }}>{L(`${h().busy} running`, `${h().busy} 运行中`)}</Text>
@@ -2754,7 +2560,7 @@ function NotifySettings(props: { push: Push; view: SettingsView | null; save: (p
     <Group title={L("Notifications", "通知")} hint={systemNotifications() ? L("While Noop is running, decisions that need you appear as system notifications. Click one to jump to it.", "Noop 运行时，需要你拍板的事会发系统通知，点开直接到这一条。") : L("Decisions that need you are pushed to your phone. You can pick an option right from the notification.", "需要你拍板的事推送到手机；通知上可以直接选择选项。")}>
       <View style={{ gap: 12, paddingHorizontal: 16, paddingVertical: 14 }}>
         <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
-          <Dot tone={push.info()?.subscribed ? "on" : push.info()?.permission === "denied" ? "bad" : "off"} />
+          <Indicator status={push.info()?.subscribed ? "online" : push.info()?.permission === "denied" ? "error" : "idle"} />
           <View style={{ flex: 1, gap: 2 }}>
             <Text style={{ fontSize: 15.5, fontWeight: "600", color: colors.text }}>{push.info()?.device ?? L("This device", "本设备")}</Text>
             <Text testID="push-state" style={{ fontSize: 13.5, color: colors.muted }}>{state()}</Text>
@@ -2772,10 +2578,10 @@ function NotifySettings(props: { push: Push; view: SettingsView | null; save: (p
         <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
           <If
             when={push.info()?.subscribed}
-            else={<Btn testID="push-enable" label={L("Turn on notifications", "开启通知")} icon="bell" kind="primary" busy={push.busy()} disabled={!push.canAsk()} onPress={push.enable} />}
+            else={<Button testID="push-enable" label={L("Turn on notifications", "开启通知")} icon="bell" variant="primary" loading={push.busy()} disabled={!push.canAsk()} onPress={push.enable} />}
           >
-            <Btn testID="push-test" label={L("Send test notification", "发送测试通知")} icon="bell" busy={push.busy()} onPress={push.test} />
-            <Btn testID="push-disable" label={L("Turn off on this device", "关闭本设备通知")} kind="ghost" onPress={push.disable} />
+            <Button testID="push-test" label={L("Send test notification", "发送测试通知")} icon="bell" loading={push.busy()} onPress={push.test} />
+            <Button testID="push-disable" label={L("Turn off on this device", "关闭本设备通知")} variant="ghost" onPress={push.disable} />
           </If>
         </View>
         <If when={push.note()}>
@@ -2789,10 +2595,10 @@ function NotifySettings(props: { push: Push; view: SettingsView | null; save: (p
             {(k) => (
               <View style={{ flexDirection: "row", alignItems: "center", gap: 12, minHeight: 36 }}>
                 <Text style={{ flex: 1, fontSize: 15.5, color: colors.text }}>{k()[1]}</Text>
-                <Toggle
+                <Switch
                   testID={`notify-${k()[0]}`}
                   label={k()[1]}
-                  value={prefs().kinds[k()[0]]}
+                  checked={prefs().kinds[k()[0]]}
                   onChange={(on) => setPrefs({ kinds: { ...prefs().kinds, [k()[0]]: on } })}
                 />
               </View>
@@ -3015,10 +2821,10 @@ function TeamSettings(props: { hub: Hub; push: Push; settings: Settings; wide: b
                         selected={r().every}
                         onPick={(iv) => save(patches.routine(r().name, { every: iv }))}
                       />
-                      <Toggle
+                      <Switch
                         testID={`routine-${r().name}`}
                         label={r().name}
-                        value={r().enabled}
+                        checked={r().enabled}
                         onChange={(on) => save(patches.routine(r().name, { enabled: on }))}
                       />
                     </View>
@@ -3066,11 +2872,11 @@ function TeamSettings(props: { hub: Hub; push: Push; settings: Settings; wide: b
         <Group title={L("Account", "账号与连接")} hint={L("You stay signed in on this device and reconnect automatically next time.", "登录状态保存在这台设备上，下次打开自动连接。")}>
           <View style={{ flexDirection: props.wide ? "row" : "column", alignItems: props.wide ? "center" : "stretch", gap: 10, paddingHorizontal: 16, paddingVertical: 14 }}>
             <View style={{ flex: props.wide ? 1 : undefined, flexDirection: "row", alignItems: "center", gap: 8 }}>
-              <Dot tone={props.hub.conn() === "live" ? "on" : props.hub.conn() === "unauthorized" || props.hub.conn() === "blocked" ? "bad" : "wait"} />
+              <Indicator status={props.hub.conn() === "live" ? "online" : props.hub.conn() === "unauthorized" || props.hub.conn() === "blocked" ? "error" : "waiting"} />
               <Text style={{ flex: 1, fontSize: 15, color: colors.text, numberOfLines: 1 }}>{props.hub.cfg.url}</Text>
             </View>
             <View style={{ flexDirection: "row", gap: 8 }}>
-              <Btn label={L("Sign out", "退出登录")} kind="danger" onPress={props.onDisconnect} testID="logout" />
+              <Button label={L("Sign out", "退出登录")} variant="danger" onPress={props.onDisconnect} testID="logout" />
             </View>
           </View>
         </Group>
@@ -3119,11 +2925,6 @@ function Section(props: { title?: string; hint?: string; testID?: string; childr
       </If>
     </View>
   );
-}
-
-/** The hairline above every row of a section but its first, inset to the text. */
-function Hairline(props: { inset?: number }) {
-  return <View style={{ position: "absolute", top: 0, left: props.inset ?? 16, right: 0, height: 0.5, backgroundColor: surfaceEdge() }} />;
 }
 
 /** A row of a section, at least 48 pt tall: a label (and a line under it), then a value, a control or a chevron. */
@@ -3188,7 +2989,7 @@ function CommandRows(props: { settings: Settings }) {
             hoverStyle={hovered()}
             class="active:bg-raised"
           >
-            <Hairline />
+            <Separator top />
             <View style={{ flexDirection: "row", alignItems: "center", gap: 12, paddingLeft: 16, paddingRight: 14, paddingVertical: 11 }}>
               <View style={{ flex: 1, minWidth: 0, gap: 3 }}>
                 <Text style={{ fontSize: 15.5, fontWeight: "500", color: colors.text, numberOfLines: 1 }}>/{c().name}</Text>
@@ -3244,7 +3045,7 @@ function CommandEditor(props: { settings: Settings }) {
       <View style={{ width: "100%", maxWidth: 560, borderRadius: 16, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.surface, overflow: "hidden" }}>
         <View style={{ flexDirection: "row", alignItems: "center", paddingLeft: 20, paddingRight: 10, height: 56, borderBottomWidth: 0.5, borderBottomColor: surfaceEdge() }}>
           <Text style={{ flex: 1, fontSize: 17, fontWeight: "600", color: colors.text }}>{isNew() ? L("New command", "新建指令") : L("Edit command", "编辑指令")}</Text>
-          <ToolButton icon="close" label={L("Close", "关闭")} shortcut="Esc" onPress={close} />
+          <IconButton icon="close" label={L("Close", "关闭")} shortcut="Esc" onPress={close} />
         </View>
         <View style={{ gap: 16, padding: 20 }}>
           <Field label={L("Name", "名称")} value={name()} onChange={(v) => { name.set(v); note.set(""); }} placeholder={L("e.g. daily-report", "例如：日报")} testID="command-name" autoFocus={isNew()} hint={clean() ? L(`Type /${clean()} in the message box to use it`, `在输入框里输入 /${clean()} 选用`) : L("Type / and the name in the message box to use it", "在输入框里输入 / 加名称选用")} />
@@ -3280,11 +3081,11 @@ function CommandEditor(props: { settings: Settings }) {
         </View>
         <View style={{ flexDirection: "row", alignItems: "center", gap: 10, paddingHorizontal: 20, paddingBottom: 20 }}>
           <If when={!isNew()}>
-            <Btn label={L("Delete", "删除")} kind="danger" icon="trash" onPress={() => void remove()} testID="command-delete" />
+            <Button label={L("Delete", "删除")} variant="danger" icon="trash" onPress={() => void remove()} testID="command-delete" />
           </If>
           <View style={{ flex: 1 }} />
-          <Btn label={L("Cancel", "取消")} kind="ghost" onPress={close} testID="command-cancel" />
-          <Btn label={isNew() ? L("Add", "添加") : L("Save", "保存")} kind="primary" disabled={!ok()} onPress={() => void submit()} testID="command-save" />
+          <Button label={L("Cancel", "取消")} variant="ghost" onPress={close} testID="command-cancel" />
+          <Button label={isNew() ? L("Add", "添加") : L("Save", "保存")} variant="primary" disabled={!ok()} onPress={() => void submit()} testID="command-save" />
         </View>
       </View>
     </Dialog>
@@ -3379,7 +3180,7 @@ function SetRow(props: {
       style={{ minHeight: 48, flexDirection: "row", alignItems: "center", gap: 12, paddingLeft: 16, paddingRight: 14, paddingVertical: 10 }}
     >
       <If when={!props.first}>
-        <Hairline inset={props.inset} />
+        <Separator top inset={props.inset} />
       </If>
       {props.leading}
       <View style={{ flex: 1, minWidth: 0, gap: 2 }}>
@@ -3441,7 +3242,7 @@ function Choices(props: { label: string; choices: Choice[]; selected: string | n
             style={{ minHeight: 48, flexDirection: "row", alignItems: "center", gap: 12, paddingLeft: 16, paddingRight: 16, paddingVertical: 10 }}
           >
             <If when={i() > 0}>
-              <Hairline />
+              <Separator top />
             </If>
             <View style={{ flex: 1, gap: 2 }}>
               <Text style={{ fontSize: 16, color: colors.text }}>{c().label}</Text>
@@ -3571,7 +3372,7 @@ function PhoneSettings(props: { hub: Hub; push: Push; settings: Settings; onOpen
       <Section title={L("Account", "账号与连接")} hint={L("You stay signed in on this device and reconnect automatically next time.", "登录状态保存在这台设备上，下次打开自动连接。")}>
         <SetRow
           first
-          leading={<Dot tone={props.hub.conn() === "live" ? "on" : props.hub.conn() === "unauthorized" || props.hub.conn() === "blocked" ? "bad" : "wait"} />}
+          leading={<Indicator status={props.hub.conn() === "live" ? "online" : props.hub.conn() === "unauthorized" || props.hub.conn() === "blocked" ? "error" : "waiting"} />}
           label={props.hub.cfg.url.replace(/^https?:\/\//, "")}
         />
         <SetRow label={L("Sign out", "退出登录")} tone="danger" onPress={() => void logout()} testID="logout" inset={0} />
@@ -3618,10 +3419,10 @@ function PhoneNotify(props: { push: Push; settings: Settings }) {
                 first={i() === 0}
                 label={k()[1]}
                 trailing={
-                  <Toggle
+                  <Switch
                     testID={`notify-${k()[0]}`}
                     label={k()[1]}
-                    value={notify.prefs().kinds[k()[0]]}
+                    checked={notify.prefs().kinds[k()[0]]}
                     onChange={(on) => notify.setPrefs({ kinds: { ...notify.prefs().kinds, [k()[0]]: on } })}
                   />
                 }
@@ -3687,7 +3488,7 @@ function PhoneRoutine(props: { name: string; settings: Settings }) {
               <SetRow
                 first
                 label={L("Enabled", "启用")}
-                trailing={<Toggle testID={`routine-${props.name}`} label={L("Enabled", "启用")} value={r().enabled} onChange={(on) => save(patches.routine(props.name, { enabled: on }))} />}
+                trailing={<Switch testID={`routine-${props.name}`} label={L("Enabled", "启用")} checked={r().enabled} onChange={(on) => save(patches.routine(props.name, { enabled: on }))} />}
               />
             </Section>
             <Section title={L("Interval", "运行间隔")}>
@@ -3870,7 +3671,7 @@ function HelpSheet(props: { open: boolean; onClose: () => void }) {
       >
         <View style={{ flexDirection: "row", alignItems: "center", paddingLeft: 20, paddingRight: 10, height: 56, borderBottomWidth: 0.5, borderBottomColor: surfaceEdge() }}>
           <Text style={{ flex: 1, fontSize: 17, fontWeight: "600", color: colors.text }}>{L("Keyboard shortcuts", "键盘快捷键")}</Text>
-          <ToolButton icon="close" label={L("Close", "关闭")} shortcut="Esc" onPress={props.onClose} />
+          <IconButton icon="close" label={L("Close", "关闭")} shortcut="Esc" onPress={props.onClose} />
         </View>
         <View style={{ paddingVertical: 8 }}>
           <Each of={SHORTCUTS()}>
@@ -3878,7 +3679,7 @@ function HelpSheet(props: { open: boolean; onClose: () => void }) {
               <View style={{ flexDirection: "row", alignItems: "center", minHeight: 38, paddingHorizontal: 20, gap: 12 }}>
                 <Text style={{ flex: 1, fontSize: 15, color: colors.text }}>{s()[1]}</Text>
                 <View style={{ flexDirection: "row", gap: 4 }}>
-                  <Each of={s()[0].split("  ·  ")}>{(k) => <Kbd k={k()} />}</Each>
+                  <Each of={s()[0].split("  ·  ")}>{(k) => <Kbd keys={k()} />}</Each>
                 </View>
               </View>
             )}
@@ -4711,10 +4512,10 @@ function Chat(props: { hub: Hub; openRef?: string | null; onConnection: () => vo
                     <Text style={{ fontSize: 16, lineHeight: 24, color: colors.muted, textAlign: "center" }}>{L("The team works in the background. Decisions that need you appear here.", "团队在后台运转。需要你拍板的事会出现在这里。")}</Text>
                     <If when={!touch}>
                       <View style={{ flexDirection: "row", alignItems: "center", gap: 6, marginTop: 8 }}>
-                        <Kbd k="/" />
+                        <Kbd keys="/" />
                         <Text style={{ fontSize: 14, color: colors.faint }}>{L("Start typing", "开始输入")}</Text>
                         <View style={{ width: 12 }} />
-                        <Kbd k="?" />
+                        <Kbd keys="?" />
                         <Text style={{ fontSize: 14, color: colors.faint }}>{L("All shortcuts", "全部快捷键")}</Text>
                       </View>
                     </If>
@@ -4743,7 +4544,7 @@ function Chat(props: { hub: Hub; openRef?: string | null; onConnection: () => vo
                     if ("more" in row) {
                       return (
                         <View style={{ alignItems: "center", marginTop: 16, marginBottom: 4 }}>
-                          <Btn testID="timeline-more" label={L(`Load earlier messages (${row.more})`, `加载更早的消息（还有 ${row.more} 条）`)} kind="secondary" onPress={() => limit.set(untracked(limit) + PAGE)} />
+                          <Button testID="timeline-more" label={L(`Load earlier messages (${row.more})`, `加载更早的消息（还有 ${row.more} 条）`)} variant="secondary" onPress={() => limit.set(untracked(limit) + PAGE)} />
                         </View>
                       );
                     }
@@ -4846,7 +4647,7 @@ function Chat(props: { hub: Hub; openRef?: string | null; onConnection: () => vo
                       `这台设备的出口 IP ${hub.blockedIp()} 不在允许名单（HUB_ALLOW_IPS）里。在主机上把它加进去，Noop 会自动重连。`)}
                   </Text>
                   <View style={{ flexDirection: "row" }}>
-                    <Btn label={L("Copy IP", "复制 IP")} onPress={() => void Clipboard.writeText(hub.blockedIp())} />
+                    <Button label={L("Copy IP", "复制 IP")} onPress={() => void Clipboard.writeText(hub.blockedIp())} />
                   </View>
                 </View>
               </If>
@@ -4868,7 +4669,7 @@ function Chat(props: { hub: Hub; openRef?: string | null; onConnection: () => vo
                     {hub.conn() === "unauthorized" ? L("Your session expired. Please sign in again.", "登录已过期，请重新登录。") : L("Lost connection to Noop. Reconnecting…", "与 Noop 的连接断开了，正在自动重连…")}
                   </Text>
                   <If when={hub.conn() === "unauthorized"}>
-                    <Btn label={L("Sign in again", "重新登录")} kind="danger" onPress={props.onConnection} />
+                    <Button label={L("Sign in again", "重新登录")} variant="danger" onPress={props.onConnection} />
                   </If>
                 </View>
               </If>
@@ -4906,7 +4707,7 @@ function Chat(props: { hub: Hub; openRef?: string | null; onConnection: () => vo
                         onPress={() => replyTo.set(null)}
                         role="button"
                         accessibilityLabel={L("Cancel reply", "取消回复")}
-                        tooltip={<Tip label={L("Cancel reply", "取消回复")} shortcut="Esc" />}
+                        tooltip={<Tooltip label={L("Cancel reply", "取消回复")} shortcut="Esc" />}
                         hoverStyle={hovered()}
                         style={{ width: 24, height: 24, borderRadius: 6, alignItems: "center", justifyContent: "center" }}
                       >
@@ -4928,7 +4729,7 @@ function Chat(props: { hub: Hub; openRef?: string | null; onConnection: () => vo
                             testID="remove-attachment"
                             role="button"
                             accessibilityLabel={L(`Remove ${a().name}`, `移除 ${a().name}`)}
-                            tooltip={touch ? undefined : <Tip label={L("Remove", "移除")} />}
+                            tooltip={touch ? undefined : <Tooltip label={L("Remove", "移除")} />}
                             onPress={() => unattach(a().id)}
                             hoverStyle={{ opacity: 0.85 }}
                             style={{
@@ -4989,7 +4790,7 @@ function Chat(props: { hub: Hub; openRef?: string | null; onConnection: () => vo
                       testID="attach"
                       role="button"
                       accessibilityLabel={L("Add image", "添加图片")}
-                      tooltip={touch ? undefined : <Tip label={L("Add image (or paste or drop)", "添加图片（也可粘贴或拖入）")} />}
+                      tooltip={touch ? undefined : <Tooltip label={L("Add image (or paste or drop)", "添加图片（也可粘贴或拖入）")} />}
                       onPress={() => void pickImages()}
                       hoverStyle={hovered()}
                       style={{ width: touch ? 44 : 36, height: touch ? 44 : 36, marginLeft: -8, borderRadius: touch ? 22 : 18, alignItems: "center", justifyContent: "center" }}
@@ -5027,7 +4828,7 @@ function Chat(props: { hub: Hub; openRef?: string | null; onConnection: () => vo
                       role="button"
                       accessibilityLabel={speech() === "off" ? L("Voice input", "语音输入") : L("Stop voice input", "停止语音输入")}
                       accessibilityState={{ selected: speech() !== "off" }}
-                      tooltip={touch ? undefined : <Tip label={speech() === "off" ? L("Voice input", "语音输入") : L("Stop voice input", "停止语音输入")} />}
+                      tooltip={touch ? undefined : <Tooltip label={speech() === "off" ? L("Voice input", "语音输入") : L("Stop voice input", "停止语音输入")} />}
                       onPress={toggleDictation}
                       hoverStyle={speech() === "off" ? hovered() : { opacity: 0.9 }}
                       style={{
@@ -5045,7 +4846,7 @@ function Chat(props: { hub: Hub; openRef?: string | null; onConnection: () => vo
                     </View>
                   </If>
                   <If when={!compactComposer()}>
-                    <SendButton testID="send" disabled={!canSend()} onPress={submit} />
+                    <IconButton variant="primary" icon="arrow-up" label={L("Send", "发送")} shortcut="Enter" testID="send" disabled={!canSend()} onPress={submit} />
                   </If>
                 </View>
               </View>
@@ -5121,10 +4922,10 @@ function Chat(props: { hub: Hub; openRef?: string | null; onConnection: () => vo
       }}
     >
       <If when={!wide() && p.route === CHANNEL}>
-        <ToolButton icon="menu" label={L("Menu", "菜单")} onPress={() => drawer.set(true)} />
+        <IconButton icon="menu" label={L("Menu", "菜单")} onPress={() => drawer.set(true)} />
       </If>
       <If when={wide() && !sidebarOpen()}>
-        <ToolButton icon="sidebar" label={L("Show sidebar", "显示侧栏")} shortcut={keymap.label("mod+b")} onPress={() => setSidebarOpen(true)} />
+        <IconButton icon="sidebar" label={L("Show sidebar", "显示侧栏")} shortcut={keymap.label("mod+b")} onPress={() => setSidebarOpen(true)} />
       </If>
       <If when={below(p.route)}>
         {(b) => (
@@ -5146,10 +4947,10 @@ function Chat(props: { hub: Hub; openRef?: string | null; onConnection: () => vo
         </If>
       </View>
       <If when={p.route === CHANNEL && !shownDoc() && latestDoc()}>
-        <ToolButton icon="document" label={L("Open latest report", "打开最新报告")} onPress={() => { const d = latestDoc(); reading.set(d && { ...d, at: readerAt() }); }} testID="doc-reopen" />
+        <IconButton icon="document" label={L("Open latest report", "打开最新报告")} onPress={() => { const d = latestDoc(); reading.set(d && { ...d, at: readerAt() }); }} testID="doc-reopen" />
       </If>
       <If when={!wide() && p.route === CHANNEL}>
-        <ToolButton icon="sliders" label={L("Settings", "设置")} onPress={openTeam} testID="settings-top" />
+        <IconButton icon="sliders" label={L("Settings", "设置")} onPress={openTeam} testID="settings-top" />
       </If>
     </View>
   );
@@ -5208,13 +5009,13 @@ function Chat(props: { hub: Hub; openRef?: string | null; onConnection: () => vo
             title={titleOf(route)}
             header={systemHeader ? undefined : <Bar route={route} />}
             headerBackTitle={backTitle(route)}
-            headerLeft={systemHeader && route === CHANNEL && !wide() ? <ToolButton icon="menu" label={L("Menu", "菜单")} onPress={() => drawer.set(true)} /> : undefined}
+            headerLeft={systemHeader && route === CHANNEL && !wide() ? <IconButton icon="menu" label={L("Menu", "菜单")} onPress={() => drawer.set(true)} /> : undefined}
             ios={{ headerLeftSymbol: "sidebar.left", headerRightSymbol: "gearshape" }}
             headerTitle={
               // phones: a folded page's compact title replaces the system title until its head is back in sight
               systemHeader && folded(route) ? <FoldedTitle folded={folded(route)!} stacked /> : undefined
             }
-            headerRight={systemHeader && route === CHANNEL ? <ToolButton icon="sliders" label={L("Settings", "设置")} onPress={openTeam} testID="settings-top" /> : undefined}
+            headerRight={systemHeader && route === CHANNEL ? <IconButton icon="sliders" label={L("Settings", "设置")} onPress={openTeam} testID="settings-top" /> : undefined}
             style={{ backgroundColor: colors.background }}
           >
             {content(route)}
@@ -5239,7 +5040,7 @@ function Chat(props: { hub: Hub; openRef?: string | null; onConnection: () => vo
                 style={{ width: "100%", flexDirection: "row", alignItems: "flex-start", borderRadius: radius.card,
                   borderWidth: 1, borderColor: colors.border, backgroundColor: colors.surface,
                   boxShadow: "0 4px 16px rgba(0,0,0,0.12)" }}>
-                <Button testID="toast" accessibilityLabel={L(`View ${t().ref}`, `查看 ${t().ref}`)}
+                <BaseButton testID="toast" accessibilityLabel={L(`View ${t().ref}`, `查看 ${t().ref}`)}
                   class="focus-visible:ring-2 focus-visible:ring-ring active:opacity-70"
                   onPress={() => {
                     const ref = t().ref;
@@ -5248,18 +5049,18 @@ function Chat(props: { hub: Hub; openRef?: string | null; onConnection: () => vo
                   }}
                   style={{ flex: 1, minWidth: 0, minHeight: 44, padding: 12, alignItems: "stretch", gap: 4 }}>
                   <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
-                    <Dot tone="wait" />
+                    <Indicator status="waiting" />
                     <Text style={{ flex: 1, minWidth: 0, fontSize: 13, fontWeight: "600", color: colors.muted, numberOfLines: 1 }}>
                       {L(`New decision ${t().ref}`, `新决策 ${t().ref}`)}
                     </Text>
                   </View>
                   <Text style={{ fontSize: 16, color: colors.text, numberOfLines: 2 }}>{shortGitHubRefs(t().text)}</Text>
-                </Button>
-                <Button testID="dismiss-decision-notification" accessibilityLabel={L("Dismiss notification", "关闭通知")}
+                </BaseButton>
+                <BaseButton testID="dismiss-decision-notification" accessibilityLabel={L("Dismiss notification", "关闭通知")}
                   onPress={() => toast.set(null)} class="focus-visible:ring-2 focus-visible:ring-ring active:opacity-70"
                   style={{ width: 44, height: 44, flexShrink: 0, alignItems: "center", justifyContent: "center" }}>
                   <Icon name="close" size={16} tint={colors.muted} />
-                </Button>
+                </BaseButton>
               </Toast>
             </ToastStack>
           </Overlay>
@@ -5487,7 +5288,7 @@ function Login(props: { url: string; served: boolean; email: string; notice?: st
                     when={editUrl()}
                     else={
                       <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
-                        <Dot tone="on" />
+                        <Indicator status="online" />
                         <Text style={{ flex: 1, fontSize: 14, color: colors.muted, numberOfLines: 1 }}>{L(`Server: ${server()}`, `服务器：${server()}`)}</Text>
                         <View role="button" accessibilityLabel={L("Change server", "更改服务器")} onPress={() => editUrl.set(true)} hoverStyle={hovered()} style={{ height: 30, justifyContent: "center", paddingHorizontal: 8, borderRadius: 6 }}>
                           <Text style={{ fontSize: 14, fontWeight: "500", color: colors.accent }}>{L("Change", "更改")}</Text>
@@ -5548,9 +5349,9 @@ function Login(props: { url: string; served: boolean; email: string; notice?: st
             </If>
             <If
               when={step() === "code"}
-              else={<Btn testID="send-code" label={busy() ? L("Sending…", "发送中…") : L("Send code", "发送验证码")} kind="primary" busy={busy()} grow onPress={sendCode} />}
+              else={<Button testID="send-code" label={busy() ? L("Sending…", "发送中…") : L("Send code", "发送验证码")} variant="primary" loading={busy()} grow onPress={sendCode} />}
             >
-              <Btn testID="verify" label={busy() ? L("Signing in…", "登录中…") : L("Sign in", "登录")} kind="primary" busy={busy()} disabled={code().length !== CODE_LEN || totp().length !== 6} grow onPress={verify} />
+              <Button testID="verify" label={busy() ? L("Signing in…", "登录中…") : L("Sign in", "登录")} variant="primary" loading={busy()} disabled={code().length !== CODE_LEN || totp().length !== 6} grow onPress={verify} />
             </If>
           </View>
         </View>

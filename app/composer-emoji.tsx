@@ -2,7 +2,7 @@ import { keyboardFrame, safeArea, signal, Text, View, windowSize } from "nsh";
 import { Button, Popover, Sheet } from "nsh/base";
 import * as base from "nsh/base";
 import { L } from "./i18n";
-import { colors, hovered, Icon, Tip } from "./ui";
+import { colors, hovered, Icon, Tooltip } from "./ui";
 import { popupSurface } from "./ui/popup";
 
 // Package updates can reach shells predating EmojiPicker. Keep those shells usable.
@@ -30,7 +30,7 @@ export function ComposerEmoji(props: {
     <Button
       testID="emoji"
       accessibilityLabel={L("Choose emoji", "选择表情")}
-      tooltip={props.touch ? undefined : <Tip label={L("Choose emoji", "选择表情")} />}
+      tooltip={props.touch ? undefined : <Tooltip label={L("Choose emoji", "选择表情")} />}
       onPress={props.touch ? () => change(true) : undefined}
       hoverStyle={hovered()}
       style={{ width: props.touch ? 44 : 36, height: props.touch ? 44 : 36, borderRadius: props.touch ? 22 : 18, alignItems: "center", justifyContent: "center" }}
